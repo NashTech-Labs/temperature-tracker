@@ -35,11 +35,14 @@
     eventBus.enableReconnect(true)
     eventBus.onopen = () => {
         eventBus.registerHandler("temperature.updates", (err, message) => {
-            let uuid = message.body.uuid;
-            if(!chart.data.labels.includes(uuid)){
-                chart.data.labels.push(uuid);
+            let uuid = message.body.timestamp;
+            var date = new Date(uuid).toString();
+            let day = date.substring(0, 16);
+            console.log(date);
+            if(!chart.data.labels.includes(day)){
+                chart.data.labels.push(day);
             }
-            let index = chart.data.labels.indexOf(uuid);
+            let index = chart.data.labels.indexOf(day);
             chart.data.datasets[0].data[index] = message.body.temperature;
             chart.update();
         });

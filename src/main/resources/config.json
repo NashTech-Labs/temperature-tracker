@@ -1,0 +1,10 @@
+{
+  "http": {
+    "port": 8181,
+    "dashboard_port": 8282
+  },
+  "db": {
+    "url": "mongodb://127.0.0.1:27017",
+    "db_name": "temperaturedb"
+  }
+}
