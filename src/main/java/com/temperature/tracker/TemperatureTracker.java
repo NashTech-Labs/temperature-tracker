@@ -40,6 +40,10 @@ public class TemperatureTracker extends AbstractVerticle {
     private final SimpleDateFormat dateFormat =
             new SimpleDateFormat("MMM dd,yyyy HH:mm");
     /**
+     * config.json file path.
+     */
+    private static final String CONFIG_PATH = "src/main/resources/config.json";
+    /**
      * create mongodb client to communicate with mongodb.
      */
     private MongoClient client;
@@ -55,7 +59,7 @@ public class TemperatureTracker extends AbstractVerticle {
                 .setType("file")
                 .setFormat("json")
                 .setConfig(new JsonObject()
-                        .put("path", "src/main/resources/config.json"));
+                        .put("path", CONFIG_PATH));
         ConfigRetrieverOptions retrieverOptions = new ConfigRetrieverOptions()
                 .addStore(defaultConfig);
         ConfigRetriever configRetriever =
