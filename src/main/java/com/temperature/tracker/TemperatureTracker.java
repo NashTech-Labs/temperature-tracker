@@ -1,4 +1,5 @@
 package com.temperature.tracker;
+import com.temperature.tracker.dao.TemperatureTrackerDAO;
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.vertx.config.ConfigRetriever;
 import io.vertx.config.ConfigRetrieverOptions;
@@ -10,7 +11,6 @@ import io.vertx.core.Promise;
 import io.vertx.core.eventbus.Message;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
-import io.vertx.ext.mongo.MongoClient;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.RoutingContext;
 import org.slf4j.Logger;
@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 
 import java.text.SimpleDateFormat;
 import java.util.Date;
+import java.util.List;
 import java.util.Random;
 
 public class TemperatureTracker extends AbstractVerticle {
@@ -44,9 +45,10 @@ public class TemperatureTracker extends AbstractVerticle {
      */
     private static final String CONFIG_PATH = "src/main/resources/config.json";
     /**
-     * create mongodb client to communicate with mongodb.
+     * create TemperatureTrackerDAO object.
      */
-    private MongoClient client;
+    private final TemperatureTrackerDAO temperatureTrackerDAO =
+            new TemperatureTrackerDAO();
     /**
      *
      * @param startPromise
@@ -68,17 +70,22 @@ public class TemperatureTracker extends AbstractVerticle {
 //        sending to recordTemperature() method to insert into database.
         vertx.eventBus()
                 .consumer("temperature.updates", this::recordTemperature);
-        // This handler will get called every second.
+//        This handler will get called every second.
         vertx.setPeriodic(1000, this::updateTemperature);
-        // Creating router object
+//        Creating router object
         Router router = Router.router(vertx);
+//        route requests
+        router.route().handler(this::greetHello);
         router.get("/all").handler(this::allData);
         router.get("/last-give-minutes").handler(this::getLastFiveMinutes);
         router.get("/get/:id").handler(this::getDataById);
         Handler<AsyncResult<JsonObject>> handler = asyncResult ->
-                this.handleConigResult(asyncResult, router, startPromise);
+                this.handleConfigResult(asyncResult, router, startPromise);
         //  To retrieve the values from config.json file
         configRetriever.getConfig(handler);
+    }
+    private void greetHello(final RoutingContext context) {
+        context.response().end("Welcome to Temperature Tracker API");
     }
     /**
      * This method will retrieve the values from config.json file
@@ -87,7 +94,7 @@ public class TemperatureTracker extends AbstractVerticle {
      * @param router
      * @param startPromise
      */
-    private void handleConigResult(final AsyncResult<JsonObject> asyncResult,
+    private void handleConfigResult(final AsyncResult<JsonObject> asyncResult,
             final Router router, final Promise<Void> startPromise) {
         if (asyncResult.succeeded()) {
             JsonObject config = asyncResult.result();
@@ -97,9 +104,7 @@ public class TemperatureTracker extends AbstractVerticle {
             String dbUrl = db.getString("db_url");
             String dbName = db.getString("db_name");
 //         ****************** Mongodb connection ****************
-            client = MongoClient.create(vertx, new JsonObject()
-                    .put("url", dbUrl)
-                    .put("db_name", dbName));
+            temperatureTrackerDAO.createConnection(vertx, dbUrl, dbName);
 //            creating server
             vertx.createHttpServer()
                     .requestHandler(router)
@@ -113,7 +118,6 @@ public class TemperatureTracker extends AbstractVerticle {
                     .onFailure(startPromise::fail);
         } else {
             LOGGER.info(asyncResult.cause().getMessage());
-            System.out.println("Not red" + asyncResult.cause().getMessage());
         }
     }
     /**
@@ -124,20 +128,17 @@ public class TemperatureTracker extends AbstractVerticle {
         LOGGER.info("Processing http request from {} ",
                 context.request().remoteAddress());
         JsonArray data = new JsonArray();
-        Long lastFive = System.currentTimeMillis() - (5 * 60 * 1000);
-        JsonObject lastFiveMinutesQuery = new JsonObject()
-                .put("timestamp", new JsonObject().put("$gte", lastFive));
-        client.find("temperature_records", lastFiveMinutesQuery, res -> {
+        Handler<AsyncResult<List<JsonObject>>> handler = res -> {
             if (res.succeeded()) {
                 for (JsonObject json : res.result()) {
                     Long milliSeconds = json.getLong("timestamp");
                     //creating Date from millisecond
                     Date date = new Date(milliSeconds);
                     data.add(new JsonObject()
-                                    .put("id", json.getString("_id"))
-                                    .put("temperature",
-                                            json.getDouble("temperature"))
-                                    .put("DateTime", dateFormat.format(date))
+                            .put("id", json.getString("_id"))
+                            .put("temperature",
+                                    json.getDouble("temperature"))
+                            .put("DateTime", dateFormat.format(date))
                     );
                 }
             } else {
@@ -148,10 +149,12 @@ public class TemperatureTracker extends AbstractVerticle {
                     .end(data.encode())
                     .onFailure(error -> {
                         context.fail(
-                                HttpResponseStatus.INTERNAL_SERVER_ERROR.code());
+                                HttpResponseStatus
+                                        .INTERNAL_SERVER_ERROR.code());
                         LOGGER.info("Woops", error);
                     });
-        });
+        };
+        temperatureTrackerDAO.getLastFiveMints(handler);
     }
     /**
      * Inserting data into database.
@@ -160,16 +163,18 @@ public class TemperatureTracker extends AbstractVerticle {
     private void recordTemperature(
             final Message<JsonObject> jsonObjectMessage) {
         long timestamp = System.currentTimeMillis();
-        client.insert("temperature_records", new JsonObject()
+        JsonObject jsonObject = new JsonObject()
                 .put("temperature", temperature)
-                .put("timestamp", timestamp), handler -> {
+                .put("timestamp", timestamp);
+        Handler<AsyncResult<String>> resultHandler = handler -> {
             if (handler.succeeded()) {
                 LOGGER.info("Recorded " + handler.result());
             } else {
                 LOGGER.error("Recording failed ");
                 handler.cause().printStackTrace();
             }
-        });
+        };
+        temperatureTrackerDAO.recordTemperature(jsonObject, resultHandler);
     }
     /**
      * Getting all the data.
@@ -178,36 +183,30 @@ public class TemperatureTracker extends AbstractVerticle {
     private void allData(final RoutingContext context) {
         LOGGER.info("Processing all data from {} ",
                 context.request().remoteAddress());
-        JsonObject query = new JsonObject()
-                .put("timestamp", new JsonObject().put("$gt", 1000));
         JsonArray data = new JsonArray();
-        client.find("temperature_records", query, res -> {
+        Handler<AsyncResult<List<JsonObject>>> handler =  res -> {
             if (res.succeeded()) {
-                try {
-                    for (JsonObject json : res.result()) {
-                        Long milliSeconds = json.getLong("timestamp");
-                        //creating Date from millisecond
-                        Date date = new Date(milliSeconds);
-                        data.add(new JsonObject()
-                                .put("id", json.getString("_id"))
-                                .put("temperature",
-                                        json.getDouble("temperature"))
-                                .put("DateTime", dateFormat.format(date))
-                        );
-                    }
-                } catch (Exception ex) {
-                    LOGGER.info("Exception: " + ex.getMessage());
-                    ex.printStackTrace();
+                for (JsonObject json : res.result()) {
+                    Long milliSeconds = json.getLong("timestamp");
+                    //creating Date from millisecond
+                    Date date = new Date(milliSeconds);
+                    data.add(new JsonObject()
+                            .put("id", json.getString("_id"))
+                            .put("temperature",
+                                    json.getDouble("temperature"))
+                            .put("DateTime", dateFormat.format(date))
+                    );
                 }
-                context.response()
-                        .putHeader("Content-Type", "application/json")
-                        .end(new JsonObject()
-                                .put("data", data).encode());
             } else {
                 LOGGER.info("Woops");
-                context.fail(500);
+                context.fail(HttpResponseStatus.INTERNAL_SERVER_ERROR.code());
             }
-        });
+            context.response()
+                    .putHeader("Content-Type", "application/json")
+                    .end(new JsonObject()
+                            .put("data", data).encode());
+        };
+        temperatureTrackerDAO.getAllData(handler);
     }
     /**
      * Getting data by id.
@@ -216,34 +215,32 @@ public class TemperatureTracker extends AbstractVerticle {
         private void getDataById(final RoutingContext context) {
         LOGGER.info("Processing http request from {} ",
                 context.request().remoteAddress());
-        String id = context.request().getParam("id");
-//        JsonObject payload = createPayload();
         JsonArray data = new JsonArray();
-        JsonObject findQuery = new JsonObject()
-                    .put("_id", id);
-            client.find("temperature_records", findQuery, res -> {
-                if (res.succeeded()) {
-                    for (JsonObject json : res.result()) {
-                        Long milliSeconds = json.getLong("timestamp");
-                        //creating Date from millisecond
-                        Date date = new Date(milliSeconds);
-                        data.add(new JsonObject()
-                                .put("id", json.getString("_id"))
-                                .put("temperature",
+        Handler<AsyncResult<List<JsonObject>>> resultHandler = res -> {
+            if (res.succeeded()) {
+                for (JsonObject json : res.result()) {
+                    Long milliSeconds = json.getLong("timestamp");
+                    //creating Date from millisecond
+                    Date date = new Date(milliSeconds);
+                    data.add(new JsonObject()
+                            .put("id", json.getString("_id"))
+                            .put("temperature",
                                         json.getDouble("temperature"))
-                                .put("DateTime", dateFormat.format(date)));
-                    }
-                } else {
-                    res.cause().printStackTrace();
+                            .put("DateTime", dateFormat.format(date)));
                 }
-                context.response()
-                        .putHeader("Content-Type", "application/json")
-                        .end(data.encode())
-                        .onFailure(error -> {
-                            context.fail(500);
-                            LOGGER.info("Woops", error);
-                        });
-            });
+            } else {
+                res.cause().printStackTrace();
+            }
+            context.response()
+                    .putHeader("Content-Type", "application/json")
+                    .end(data.encode())
+                    .onFailure(error -> {
+                        context.fail(HttpResponseStatus
+                                .INTERNAL_SERVER_ERROR.code());
+                        LOGGER.info("Woops", error);
+                    });
+        };
+        temperatureTrackerDAO.getDataById(context, resultHandler);
     }
     /**
      *  creating payload.
