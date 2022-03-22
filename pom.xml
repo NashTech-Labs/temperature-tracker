@@ -28,6 +28,7 @@
             <artifactId>vertx-web</artifactId>
             <version>4.2.3</version>
         </dependency>
+<!--        For logging the information -->
         <dependency>
             <groupId>org.slf4j</groupId>
             <artifactId>slf4j-api</artifactId>
@@ -40,13 +41,20 @@
         </dependency>
         <dependency>
             <groupId>io.vertx</groupId>
-            <artifactId>vertx-pg-client</artifactId>
-            <version>4.2.4</version>
-        </dependency>
-        <dependency>
-            <groupId>io.vertx</groupId>
             <artifactId>vertx-hazelcast</artifactId>
             <version>4.2.4</version>
+        </dependency>
+<!--        To communicate with mongodb -->
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-mongo-client</artifactId>
+            <version>4.2.5</version>
+        </dependency>
+<!--        To handle configuration parameters -->
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-config</artifactId>
+            <version>4.2.3</version>
         </dependency>
     </dependencies>
 

@@ -16,15 +16,22 @@ public class TrackerDashboard extends AbstractVerticle {
     /**
      * create logger object for logging.
      */
-    private static final Logger logger = LoggerFactory.getLogger(TrackerDashboard.class);
-    private static final int httpPort = Integer.parseInt(
+    private static final Logger LOGGER =
+            LoggerFactory.getLogger(TrackerDashboard.class);
+    /**
+     * gets the value of the specified
+     * environment variable "HTTP_PORT" or default.
+     */
+    private static final int HTTP_PORT = Integer.parseInt(
             System.getenv().getOrDefault("HTTP_PORT", "8282"));
+    /**
+     * @param startPromise
+     * @throws Exception
+     */
     @Override
-    public void start(Promise<Void> startPromise) throws Exception {
-        Router router = Router.router(vertx);
-        /**
-         * using sockJsHandler to send the data on browser from eventBus.
-         */
+    public void start(final Promise<Void> startPromise) throws Exception {
+        final Router router = Router.router(vertx);
+//         * using sockJsHandler to send the data on browser from eventBus.
         SockJSHandler sockJSHandler = SockJSHandler.create(vertx);
         SockJSBridgeOptions bridgeOptions = new SockJSBridgeOptions()
                 .addOutboundPermitted(new PermittedOptions()
@@ -32,28 +39,27 @@ public class TrackerDashboard extends AbstractVerticle {
         sockJSHandler.bridge(bridgeOptions);
         router.route("/eventbus/*").handler(sockJSHandler);
         router.route().handler(StaticHandler.create("webroot"));
-        router.get("/*").handler(ctx-> ctx.reroute("/index.html"));
+        router.get("/*").handler(ctx -> ctx.reroute("/index.html"));
         vertx.createHttpServer()
                 .requestHandler(router)
-                .listen(httpPort)
-                .onSuccess(ok->{
-                    logger.info("Http server running : http://localhost:{}", httpPort);
+                .listen(HTTP_PORT)
+                .onSuccess(ok -> {
+                    LOGGER.info(
+                            "Http server running : http://localhost:{}",
+                            HTTP_PORT);
                     startPromise.complete();
                 })
                 .onFailure(startPromise::fail);
     }
-    
-    public static void main(String[] args) {
-        /**
-         * Clustered to use eventbus across the network.
-         */
+    public static void main(final String[] args) {
+//         * Clustered to use eventbus across the network.
         Vertx.clusteredVertx(new VertxOptions())
                 .onSuccess(vertx1 -> {
                     vertx1.deployVerticle(new TrackerDashboard());
-                    logger.info("Running" );
+                    LOGGER.info("Running");
                 })
-                .onFailure(fail->{
-                    logger.info("Failed");
+                .onFailure(fail -> {
+                    LOGGER.info("Failed");
                 });
     }
 }
