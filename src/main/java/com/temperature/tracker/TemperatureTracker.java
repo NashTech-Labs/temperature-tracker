@@ -75,9 +75,9 @@ public class TemperatureTracker extends AbstractVerticle {
 //        Creating router object
         Router router = Router.router(vertx);
 //        route requests
-        router.route().handler(this::greetHello);
+        router.get("/").handler(this::greetHello);
         router.get("/all").handler(this::allData);
-        router.get("/last-give-minutes").handler(this::getLastFiveMinutes);
+        router.get("/last-five-minutes").handler(this::getLastFiveMinutes);
         router.get("/get/:id").handler(this::getDataById);
         Handler<AsyncResult<JsonObject>> handler = asyncResult ->
                 this.handleConfigResult(asyncResult, router, startPromise);
