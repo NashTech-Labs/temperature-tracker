@@ -9,7 +9,7 @@
 7. To get by id http://localhost:8181/get/<ENTER_ID>
 
 ## Database
-1. Setup mongodb
+1. Setup mongodb.
 2. create a database "temperaturedb"
 3. create a collection "temperature_records"
 
