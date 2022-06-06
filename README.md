@@ -8,7 +8,7 @@
 6. To get last five minutes data http://localhost:8181/last-five-minutes
 7. To get by id http://localhost:8181/get/<ENTER ID>
 ## Database
-1. Setup mongodb
+1. Setup mongodb.
 2. create a database "temperaturedb"
 3. create a collection "temperature_records"
 
