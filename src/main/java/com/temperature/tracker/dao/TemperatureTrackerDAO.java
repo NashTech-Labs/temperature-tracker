@@ -16,9 +16,9 @@ public class TemperatureTrackerDAO {
     /**
      * creating the database connection.
      * @param vertx
-     * @param dbUrl
-     * @param dbName
-     * @return MongoClient object.
+     * @param dbUrl the database url
+     * @param dbName the name of the database
+     * @return MongoClient object to create connection with mongodb.
      */
     public MongoClient createConnection(
             final Vertx vertx, final String dbUrl,
